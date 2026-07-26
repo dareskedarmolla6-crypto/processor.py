@@ -1,0 +1,75 @@
+from market.runtime_supervisor_metrics import (
+    RuntimeSupervisorMetrics
+)
+
+
+class InMemoryMetricsRepository:
+
+    def __init__(self):
+        self._metrics = {}
+
+
+    def save_metrics(
+        self,
+        metrics
+    ):
+        self._metrics = metrics.copy()
+
+
+    def load_metrics(self):
+        return self._metrics.copy()
+
+
+
+def test_initial_metrics():
+
+    repository = InMemoryMetricsRepository()
+
+    metrics = RuntimeSupervisorMetrics(
+        repository
+    )
+
+    assert metrics.snapshot() == {
+        "starts": 0,
+        "stops": 0,
+        "restarts": 0,
+        "recoveries": 0,
+        "recovery_failures": 0
+    }
+
+
+
+def test_increment_persists_metric():
+
+    repository = InMemoryMetricsRepository()
+
+    metrics = RuntimeSupervisorMetrics(
+        repository
+    )
+
+    metrics.increment(
+        "starts"
+    )
+
+    saved = repository.load_metrics()
+
+    assert saved["starts"] == 1
+
+
+
+def test_snapshot_is_copy():
+
+    repository = InMemoryMetricsRepository()
+
+    metrics = RuntimeSupervisorMetrics(
+        repository
+    )
+
+    snapshot = metrics.snapshot()
+
+    snapshot["starts"] = 100
+
+    assert (
+        metrics.snapshot()["starts"]
+        == 0
+    )

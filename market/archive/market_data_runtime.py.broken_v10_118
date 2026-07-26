@@ -1,0 +1,139 @@
+import sqlite3
+
+
+class SQLiteRuntimeSupervisorMetricsRepository:
+    """
+    V10.118 Hardened Version.
+    Supports single-row database integrity with Primary Key constraints
+    and backward-compatible symmetric data loading.
+    """
+
+    def __init__(self, db_path: str):
+        self._db_path = db_path
+        self._connection = sqlite3.connect(self._db_path)
+        self._initialize()
+
+    def _initialize(self) -> None:
+        """
+        Initialize a hardened table structure with a definitive primary key.
+        """
+        # 1. መሠረታዊውን ሰንጠረዥ ከ Primary Key ጋር መፍጠር (የሲስተም ጥንካሬን ይጨምራል)
+        self._connection.execute("""
+            CREATE TABLE IF NOT EXISTS runtime_supervisor_metrics (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                starts INTEGER DEFAULT 0,
+                stops INTEGER DEFAULT 0,
+                restarts INTEGER DEFAULT 0,
+                recoveries INTEGER DEFAULT 0,
+                recovery_failures INTEGER DEFAULT 0
+            )
+        """)
+        self._connection.commit()
+
+        # 2. የ legacy_mode ዓምድን በደህንነት መጨመር
+        try:
+            self._connection.execute(
+                "ALTER TABLE runtime_supervisor_metrics ADD COLUMN legacy_mode INTEGER DEFAULT 0"
+            )
+        except sqlite3.OperationalError:
+            pass
+
+        # 3. አዲሶቹን 4 የጤና መለኪያ ዓምዶች በ Loop ማይግሬት ማድረግ
+        for column in [
+            "health_checks",
+            "healthy_states",
+            "degraded_states",
+            "failed_states"
+        ]:
+            try:
+                self._connection.execute(
+                    f"ALTER TABLE runtime_supervisor_metrics ADD COLUMN {column} INTEGER DEFAULT 0"
+                )
+            except sqlite3.OperationalError:
+                pass
+        
+        self._connection.commit()
+
+    def load_metrics(self) -> dict:
+        """
+        Load metrics safely with full asymmetric/symmetric backward compatibility.
+        """
+        cursor = self._connection.cursor()
+        cursor.execute("""
+            SELECT 
+                starts, stops, restarts, recoveries, recovery_failures,
+                legacy_mode, health_checks, healthy_states, degraded_states, failed_states 
+            FROM runtime_supervisor_metrics 
+            WHERE id = 1
+        """)
+        row = cursor.fetchone()
+
+        if not row:
+            return {}
+
+        # መሠረታዊ 5 የሊፕሳይክል ቁልፎች
+        metrics = {
+            "starts": row[0],
+            "stops": row[1],
+            "restarts": row[2],
+            "recoveries": row[3],
+            "recovery_failures": row[4]
+        }
+
+        # [Symmetry Fix] legacy_mode በሲስተሙ ውስጥ ጥቅም ላይ ከዋለ (ከ0 ውጭ ከሆነ) ይመለሳል
+        if row[5] > 0:
+            metrics["legacy_mode"] = row[5]
+
+        # አዲስ የጤና መረጃ ካለ አዲሶቹን 4 ቁልፎች ይጨምራል
+        if row[6] > 0 or row[7] > 0 or row[8] > 0 or row[9] > 0:
+            metrics.update({
+                "health_checks": row[6],
+                "healthy_states": row[7],
+                "degraded_states": row[8],
+                "failed_states": row[9]
+            })
+
+        return metrics
+
+    def save_metrics(self, metrics: dict) -> None:
+        """
+        Persist supervisor metrics under a single-row constraint (id=1).
+        """
+        cursor = self._connection.cursor()
+        cursor.execute("SELECT COUNT(*) FROM runtime_supervisor_metrics WHERE id = 1")
+        exists = cursor.fetchone()[0] > 0
+
+        current = self.load_metrics() if exists else {}
+
+        starts = metrics.get("starts", current.get("starts", 0))
+        stops = metrics.get("stops", current.get("stops", 0))
+        restarts = metrics.get("restarts", current.get("restarts", 0))
+        recoveries = metrics.get("recoveries", current.get("recoveries", 0))
+        recovery_failures = metrics.get("recovery_failures", current.get("recovery_failures", 0))
+        legacy_mode = metrics.get("legacy_mode", current.get("legacy_mode", 0))
+        
+        health_checks = metrics.get("health_checks", current.get("health_checks", 0))
+        healthy_states = metrics.get("healthy_states", current.get("healthy_states", 0))
+        degraded_states = metrics.get("degraded_states", current.get("degraded_states", 0))
+        failed_states = metrics.get("failed_states", current.get("failed_states", 0))
+
+        if exists:
+            self._connection.execute("""
+                UPDATE runtime_supervisor_metrics SET
+                    starts = ?, stops = ?, restarts = ?, recoveries = ?, recovery_failures = ?,
+                    legacy_mode = ?, health_checks = ?, healthy_states = ?, degraded_states = ?, failed_states = ?
+                WHERE id = 1
+            """, (starts, stops, restarts, recoveries, recovery_failures, legacy_mode, health_checks, healthy_states, degraded_states, failed_states))
+        else:
+            self._connection.execute("""
+                INSERT INTO runtime_supervisor_metrics (
+                    id, starts, stops, restarts, recoveries, recovery_failures,
+                    legacy_mode, health_checks, healthy_states, degraded_states, failed_states
+                ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (starts, stops, restarts, recoveries, recovery_failures, legacy_mode, health_checks, healthy_states, degraded_states, failed_states))
+        
+        self._connection.commit()
+
+    def close(self) -> None:
+        """Close the underlying database connection."""
+        self._connection.close()

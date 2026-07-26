@@ -1,0 +1,83 @@
+from market.market_data_application import MarketDataApplication
+from market.market_data_orchestrator import MarketDataOrchestrator
+from market.market_data_supervisor import MarketDataSupervisor
+from market.market_data_runtime import MarketDataRuntime
+
+from market.sqlite_runtime_state_repository import (
+    SQLiteRuntimeStateRepository
+)
+
+from market.sqlite_runtime_event_repository import (
+    SQLiteRuntimeEventRepository
+)
+
+from market.sqlite_runtime_metrics_repository import (
+    SQLiteRuntimeMetricsRepository
+)
+
+from market.sqlite_runtime_health_repository import (
+    SQLiteRuntimeHealthRepository
+)
+
+
+class MarketDataContainer:
+    """
+    Production dependency composition root.
+
+    Creates and wires market data components.
+
+    Does NOT contain:
+        - Market data logic
+        - Exchange communication
+        - Trading decisions
+    """
+
+    def __init__(
+        self,
+        scheduler,
+        db_path="fse_data.db"
+    ):
+
+        state_repository = (
+            SQLiteRuntimeStateRepository(
+                db_path
+            )
+        )
+
+        event_repository = (
+            SQLiteRuntimeEventRepository(
+                db_path
+            )
+        )
+
+        metrics_repository = (
+            SQLiteRuntimeMetricsRepository(
+                db_path
+            )
+        )
+
+        health_repository = (
+            SQLiteRuntimeHealthRepository(
+                db_path
+            )
+        )
+
+        runtime = MarketDataRuntime(
+            scheduler=scheduler,
+            state_repository=state_repository,
+            event_repository=event_repository,
+            metrics_repository=metrics_repository,
+            health_repository=health_repository
+        )
+
+        supervisor = MarketDataSupervisor(
+            runtime
+        )
+
+        orchestrator = MarketDataOrchestrator(
+            supervisor
+        )
+
+        self.application = MarketDataApplication(
+            orchestrator
+        )

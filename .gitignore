@@ -1,0 +1,146 @@
+# FSE CORE TRADING AI SYSTEM
+# Production Repository Ignore Rules
+
+
+# =========================
+# Python Runtime
+# =========================
+
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+venv/
+env/
+ENV/
+.venv/
+
+.cache/
+
+
+# =========================
+# Environment Secrets
+# CRITICAL
+# =========================
+
+.env
+.env.*
+!.env.example
+
+api_keys.json
+keys.json
+secret.txt
+session.json
+
+
+# =========================
+# Runtime State
+# =========================
+
+*.db
+*.sqlite
+*.sqlite3
+
+fse_storage.json
+
+runtime_state.json
+autonomous_state.json
+autonomous_state_*.json
+autonomous_memory.json
+
+risk_memory.json
+
+adaptive_*.db
+autonomous_*.db
+full_*.db
+live_*.db
+multi_*.db
+capital_*.db
+market_*.db
+manager*.db
+
+
+# =========================
+# Logs
+# =========================
+
+logs/
+*.log
+
+
+# =========================
+# Test Generated Data
+# =========================
+
+test_*.db
+test_*.json
+
+.pytest_cache/
+
+
+# =========================
+# Test Output
+# =========================
+
+coverage/
+htmlcov/
+
+
+# =========================
+# Build
+# =========================
+
+build/
+dist/
+*.egg-info/
+
+
+# =========================
+# IDE
+# =========================
+
+.vscode/
+.idea/
+
+*.swp
+*.swo
+
+.DS_Store
+Thumbs.db
+
+
+# =========================
+# Docker Local Overrides
+# =========================
+
+docker-compose.override.yml
+
+
+# =========================
+# Temporary Files
+# =========================
+
+*.backup
+*.bak
+*.save
+
+*.tmp
+
+
+# =========================
+# FSE Local Experiments
+# =========================
+
+fixing
+cat
+kkkk
+kkkk.save
+earch pandas
+
+
+# =========================
+# Legacy Generated Files
+# =========================
+
+legacy_archive/

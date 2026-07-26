@@ -1,0 +1,102 @@
+from market.runtime_supervisor_metrics import (
+    RuntimeSupervisorMetrics
+)
+
+
+class MarketDataRuntimeSupervisor:
+    """
+    Production runtime supervisor.
+
+    Responsibilities:
+        - Control runtime lifecycle
+        - Monitor runtime health
+        - Persist health snapshots
+        - Persist supervisor events
+        - Track recovery metrics
+        - Execute controlled recovery
+
+    Does NOT contain:
+        - Exchange communication
+        - Market data logic
+        - Trading decisions
+        - Scheduler logic
+        - Storage implementation
+    """
+
+    def __init__(
+        self,
+        runtime,
+        health_repository=None,
+        event_repository=None,
+        metrics_repository=None
+    ):
+        self._runtime = runtime
+
+        self._health_repository = (
+            health_repository
+        )
+
+        self._event_repository = (
+            event_repository
+        )
+
+        self._metrics_repository = (
+            metrics_repository
+        )
+
+        # V10.116 Architecture Alignment: Using the new core metrics object
+        self._metrics = RuntimeSupervisorMetrics(
+            repository=metrics_repository
+        )
+
+        # V10.116: Expose lifecycle metrics for legacy integration contract
+        self._metrics.persist_lifecycle()
+
+
+    # --- Backward Compatibility Methods (V10.104/V10.109 Contracts) ---
+
+    def metrics(self) -> dict:
+        """
+        Backward compatibility metrics access.
+        """
+        return self._metrics.snapshot()
+
+
+    @property
+    def running(self) -> bool:
+        """
+        Backward compatibility runtime state.
+        """
+        return getattr(
+            self._runtime,
+            "running",
+            False
+        )
+
+
+    def health(self) -> dict:
+        """
+        Backward compatibility health access.
+        """
+        return self.check_health()
+
+
+    # --- Lifecycle Management & Metric Increments ---
+
+    def start(self) -> None:
+        """
+        Start supervised runtime.
+        """
+
+        self._runtime.start()
+
+        self._metrics.increment(
+            "starts"
+        )
+
+        self.check_health()
+
+
+    def stop(self) -> None:
+        """
+        Stop supervised runtime.

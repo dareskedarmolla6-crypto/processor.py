@@ -1,0 +1,169 @@
+import sqlite3
+
+
+class SQLiteRuntimeSupervisorMetricsRepository:
+    """
+    Production SQLite repository
+    for runtime supervisor metrics.
+
+    Stores:
+        - starts
+        - stops
+        - restarts
+        - recoveries
+        - recovery_failures
+        - legacy_mode (Persisted flag for contract versioning)
+    """
+
+    def __init__(
+        self,
+        db_path: str
+    ):
+        self._db_path = db_path
+
+        self._connection = sqlite3.connect(
+            self._db_path
+        )
+
+        self._initialize()
+
+
+    def _initialize(self) -> None:
+        """
+        Create metrics table and handle schema evolution.
+        """
+
+        self._connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS
+            runtime_supervisor_metrics (
+                id INTEGER PRIMARY KEY,
+                starts INTEGER NOT NULL,
+                stops INTEGER NOT NULL,
+                restarts INTEGER NOT NULL,
+                recoveries INTEGER NOT NULL,
+                recovery_failures INTEGER NOT NULL,
+                legacy_mode INTEGER DEFAULT 0
+            )
+            """
+        )
+
+        try:
+            self._connection.execute(
+                "ALTER TABLE runtime_supervisor_metrics ADD COLUMN legacy_mode INTEGER DEFAULT 0"
+            )
+        except sqlite3.OperationalError:
+            pass
+
+        self._connection.commit()
+
+
+    def save_metrics(
+        self,
+        metrics: dict
+    ) -> None:
+        """
+        Save or update metrics, persisting the contract state.
+        """
+
+        existing = self._connection.execute(
+            """
+            SELECT id
+            FROM runtime_supervisor_metrics
+            LIMIT 1
+            """
+        ).fetchone()
+
+        is_legacy = 1 if (
+            "starts" not in metrics
+            and "stops" not in metrics
+            and "restarts" not in metrics
+        ) else 0
+
+        values = (
+            metrics.get("starts", 0),
+            metrics.get("stops", 0),
+            metrics.get("restarts", 0),
+            metrics.get("recoveries", 0),
+            metrics.get("recovery_failures", 0),
+            is_legacy
+        )
+
+
+        if existing:
+
+            self._connection.execute(
+                """
+                UPDATE runtime_supervisor_metrics
+                SET
+                    starts=?,
+                    stops=?,
+                    restarts=?,
+                    recoveries=?,
+                    recovery_failures=?,
+                    legacy_mode=?
+                WHERE id=?
+                """,
+                values + (existing[0],)
+            )
+
+        else:
+
+            self._connection.execute(
+                """
+                INSERT INTO runtime_supervisor_metrics
+                (
+                    starts,
+                    stops,
+                    restarts,
+                    recoveries,
+                    recovery_failures,
+                    legacy_mode
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                values
+            )
+
+
+        self._connection.commit()
+
+
+    def load_metrics(self) -> dict:
+        """
+        Load metrics snapshot according to the persisted contract state.
+        """
+
+        row = self._connection.execute(
+            """
+            SELECT
+                starts,
+                stops,
+                restarts,
+                recoveries,
+                recovery_failures,
+                legacy_mode
+            FROM runtime_supervisor_metrics
+            LIMIT 1
+            """
+        ).fetchone()
+
+
+        if not row:
+            return {}
+
+
+        if row[5] == 1:
+            return {
+                "recoveries": row[3],
+                "recovery_failures": row[4]
+            }
+
+
+        return {
+            "starts": row[0],
+            "stops": row[1],
+            "restarts": row[2],
+            "recoveries": row[3],
+            "recovery_failures": row[4]
+        }

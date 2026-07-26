@@ -1,0 +1,44 @@
+
+# fse/data/raw_data.py
+import time
+import logging
+
+logger = logging.getLogger(__name__)
+
+class RawDataStore:
+    """
+    ጥሬ የገበያ መረጃዎችን ለባክቴስቲንግ እና ለሲግናል ማረጋገጫ የሚያከማች ክፍል (መርህ #3)።
+    """
+
+    def __init__(self, max_buffer_size=1000):
+        self.buffer = []
+        self.max_buffer_size = max_buffer_size
+
+    def add(self, symbol: str, data: dict):
+        """ጥሬ የገበያ መረጃን ወደ ባፈር ማከል (Buffer management)።"""
+        self.buffer.append({
+            "symbol": symbol,
+            "data": data,
+            "ts": int(time.time())
+        })
+        
+        # Buffer ከመጠን በላይ እንዳይሞላ ማረጋገጥ (Safety Guard)
+        if len(self.buffer) > self.max_buffer_size:
+            self.buffer.pop(0)
+
+    def get_all(self):
+        """ሁሉንም ጥሬ መረጃ ማግኘት።"""
+        return self.buffer
+
+    def get_last(self, n=50):
+        """የመጨረሻዎቹን N መዝገቦች ብቻ ማግኘት።"""
+        return self.buffer[-n:]
+
+    def clear(self):
+        """ባፈሩን ማጽዳት።"""
+        self.buffer = []
+        logger.info("🧹 Raw data buffer cleared.")
+
+    def get_by_symbol(self, symbol: str):
+        """በተለየ ምልክት (Symbol) የተጣራ መረጃ ማግኘት።"""
+        return [item for item in self.buffer if item["symbol"] == symbol]

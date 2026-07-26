@@ -1,0 +1,119 @@
+class RuntimeSupervisorMetrics:
+    """
+    Production supervisor metrics manager.
+    """
+
+    def __init__(
+        self,
+        repository=None
+    ):
+        self._repository = repository
+
+        self._metrics = {
+            "starts": 0,
+            "stops": 0,
+            "restarts": 0,
+            "recoveries": 0,
+            "recovery_failures": 0,
+            "health_checks": 0,
+            "healthy_states": 0,
+            "degraded_states": 0,
+            "failed_states": 0
+        }
+
+        self.restore()
+
+
+    def restore(self):
+
+        if not self._repository:
+            return
+
+        saved = self._repository.load_metrics()
+
+        for key, value in saved.items():
+
+            if key in self._metrics:
+                self._metrics[key] = value
+
+
+    def increment(
+        self,
+        metric: str
+    ):
+
+        if metric not in self._metrics:
+            raise ValueError(
+                f"Unknown metric: {metric}"
+            )
+
+        self._metrics[metric] += 1
+
+        self.persist()
+
+
+    def record_health_state(
+        self,
+        state: str
+    ):
+
+        mapping = {
+            "healthy": "healthy_states",
+            "degraded": "degraded_states",
+            "failed": "failed_states"
+        }
+
+        if state not in mapping:
+            raise ValueError(
+                f"Unknown health state: {state}"
+            )
+
+        self._metrics["health_checks"] += 1
+
+        self._metrics[
+            mapping[state]
+        ] += 1
+
+        self.persist()
+
+
+    def persist(self):
+
+        if self._repository:
+
+            self._repository.save_metrics(
+                self._metrics
+            )
+
+
+    def lifecycle_snapshot(self) -> dict:
+        """
+        Return lifecycle-only metrics snapshot.
+
+        V10.116 compatibility contract:
+            - starts
+            - stops
+            - restarts
+            - recoveries
+            - recovery_failures
+        """
+
+        return {
+            "starts": self._metrics["starts"],
+            "stops": self._metrics["stops"],
+            "restarts": self._metrics["restarts"],
+            "recoveries": self._metrics["recoveries"],
+            "recovery_failures": self._metrics["recovery_failures"]
+        }
+
+
+    def snapshot(self) -> dict:
+        """
+        Return complete metrics snapshot.
+
+        V10.115 contract:
+            - lifecycle metrics
+            - health metrics
+        """
+
+        return self._metrics.copy()

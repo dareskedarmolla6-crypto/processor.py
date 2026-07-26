@@ -1,0 +1,119 @@
+import logging
+from brain.full_system import FullSystem
+
+from brain.alpha_universe import AlphaUniverse
+from brain.volatility_engine import VolatilityEngine
+from brain.trend_engine import TrendEngine
+from brain.reversal_engine import ReversalEngine
+from brain.risk_engine import RiskEngine
+from brain.leverage_engine import LeverageEngine
+from brain.grid_engine import GridEngine
+from brain.predictor import Predictor
+from brain.execution_engine import ExecutionEngine
+
+from brain.signal_engine import SignalEngine
+from brain.auto_scanner import AutoScanner
+from brain.portfolio_engine import PortfolioEngine
+from brain.position_manager import PositionManager
+from brain.exit_strategy import ExitStrategy
+
+from market.container_factory import create_market_container
+
+logger = logging.getLogger("FSE")
+
+
+def create_system():
+
+    alpha = AlphaUniverse()
+
+    volatility = VolatilityEngine()
+
+    trend = TrendEngine()
+
+    reversal = ReversalEngine()
+
+    risk = RiskEngine()
+
+    leverage = LeverageEngine()
+
+    grid = GridEngine()
+
+    predictor = Predictor()
+
+    execution = ExecutionEngine()
+
+
+    signal_engine = SignalEngine()
+
+
+    scanner = AutoScanner(
+        alpha=alpha,
+        signal_engine=signal_engine
+    )
+
+
+    portfolio_engine = PortfolioEngine()
+
+
+    exit_strategy = ExitStrategy()
+
+
+    position_manager = PositionManager(
+        execution=execution,
+        smart_exit=exit_strategy,
+        risk_engine=risk
+    )
+
+
+    return FullSystem(
+        alpha=alpha,
+        volatility=volatility,
+        trend=trend,
+        reversal=reversal,
+        risk=risk,
+        leverage=leverage,
+        grid=grid,
+        predictor=predictor,
+        execution=execution,
+        signal_engine=signal_engine,
+        scanner=scanner,
+        portfolio_engine=portfolio_engine,
+        position_manager=position_manager
+# Production market infrastructure
+market_container = create_market_container(    )
+
+
+def main():
+
+    logger.info(
+        "Starting FSE Production Runtime"
+    )
+
+# Production market infrastructure
+market_container = create_market_container()
+
+    # 1. መጀመሪያ ምልክቶች (symbols) ከ Binance ተፈልገው ይመዘገባሉ
+    market_container.bootstrap.initialize()
+
+    # 2. የዳታ ሪሲቨር ራንታይም ስራውን ይጀምራል
+    market_container.application.start()
+
+
+    system = create_system()
+
+    # 3. ዋናው ሲስተም ከተመሳሳይ የ MarketManager መረጃ ጋር ይተሳሰራል (No Duplication)
+    system.market_manager = market_container.manager
+
+
+    logger.info(
+        "FSE Production System Ready"
+    )
+
+
+    return system
+
+
+
+if __name__ == "__main__":
+
+    main()

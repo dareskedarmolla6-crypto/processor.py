@@ -1,0 +1,250 @@
+class MarketDataRuntimeSupervisor:
+    """
+    Production runtime supervisor.
+
+    Responsibilities:
+        - Control runtime lifecycle
+        - Monitor runtime health
+        - Persist health snapshots
+        - Persist supervisor events
+        - Track recovery metrics
+        - Execute controlled recovery
+
+    Does NOT contain:
+        - Exchange communication
+        - Market data logic
+        - Trading decisions
+        - Scheduler logic
+        - Storage implementation
+    """
+
+    def __init__(
+        self,
+        runtime,
+        health_repository=None,
+        event_repository=None,
+        metrics_repository=None
+    ):
+        self._runtime = runtime
+
+        self._health_repository = (
+            health_repository
+        )
+
+        self._event_repository = (
+            event_repository
+        )
+
+        self._metrics_repository = (
+            metrics_repository
+        )
+
+        self._metrics = {
+            "recoveries": 0,
+            "recovery_failures": 0
+        }
+
+        self.restore_metrics()
+
+
+    def start(self) -> None:
+        """
+        Start supervised runtime.
+        """
+
+        self._runtime.start()
+
+        self.check_health()
+
+
+    def stop(self) -> None:
+        """
+        Stop supervised runtime.
+        """
+
+        self._runtime.stop()
+
+        self.check_health()
+
+
+    def restart(self) -> dict:
+        """
+        Controlled runtime restart.
+        """
+
+        result = (
+            self._runtime.restart()
+        )
+
+        self.check_health()
+
+        return result
+
+
+    def check_health(self) -> dict:
+        """
+        Read and persist runtime health.
+        """
+
+        health = (
+            self._runtime.health()
+        )
+
+        if self._health_repository:
+
+            self._health_repository.save_health(
+                health
+            )
+
+        return health
+
+
+    def _record_event(
+        self,
+        event: str
+    ) -> None:
+        """
+        Persist supervisor event.
+        """
+
+        if self._event_repository:
+
+            self._event_repository.save_event(
+                event
+            )
+
+
+    def recover(self) -> dict:
+        """
+        Controlled recovery policy.
+        """
+
+        self._record_event(
+            "recovery_started"
+        )
+
+        health = (
+            self.check_health()
+        )
+
+        if health["healthy"]:
+
+            return {
+                "recovered": False,
+                "reason": "runtime_healthy"
+            }
+
+
+        try:
+
+            result = (
+                self._runtime.restart()
+            )
+
+            updated_health = (
+                self.check_health()
+            )
+
+            self._metrics[
+                "recoveries"
+            ] += 1
+
+            self._persist_metrics()
+
+            self._record_event(
+                "recovery_completed"
+            )
+
+            return {
+                "recovered": True,
+                "result": result,
+                "health": updated_health
+            }
+
+
+        except Exception:
+
+            self._metrics[
+                "recovery_failures"
+            ] += 1
+
+            self._persist_metrics()
+
+            self._record_event(
+                "recovery_failed"
+            )
+
+            raise
+
+
+    def metrics(self) -> dict:
+        """
+        Return metrics snapshot.
+        """
+
+        return self._metrics.copy()
+
+
+    def restore_metrics(self) -> None:
+        """
+        Restore metrics from repository.
+        """
+
+        if not self._metrics_repository:
+
+            return
+
+
+        saved = (
+            self._metrics_repository.load_metrics()
+        )
+
+
+        if saved:
+
+            self._metrics = saved.copy()
+
+
+    def _persist_metrics(self) -> None:
+        """
+        Persist supervisor metrics.
+        """
+
+        if self._metrics_repository:
+
+            self._metrics_repository.save_metrics(
+                self._metrics
+            )
+
+
+    def recovery_status(self) -> dict:
+        """
+        Return recovery status.
+        """
+
+        health = (
+            self.check_health()
+        )
+
+        return {
+            "runtime_running": self.running,
+            "healthy": health["healthy"],
+            "status": health["status"]
+        }
+
+
+    def health(self) -> dict:
+        """
+        Return supervised health.
+        """
+
+        return self.check_health()
+
+
+    @property
+    def running(self) -> bool:
+        """
+        Runtime running state.
+        """
+
+        return self._runtime.running
